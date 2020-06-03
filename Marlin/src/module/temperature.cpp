@@ -41,15 +41,6 @@
   #ifndef MAX31865_CS_PIN
     #error For a MAX31865 the MAX31865_CS_PIN must be set
   #endif
-  #if ENABLED(HEATER_0_USES_MAX31865)
-    #define HEATER_0_RAW_LOW_TEMP 0
-    #define HEATER_0_RAW_HIGH_TEMP 16384
-  #endif
-  #if ENABLED(HEATER_1_USES_MAX31865)
-    #define HEATER_1_RAW_LOW_TEMP 0
-    #define HEATER_1_RAW_HIGH_TEMP 16384
-  #endif
-
   // If SCK is defined then we're using SW SPI, otherwise Hardware
   Adafruit_MAX31865 max31865 = Adafruit_MAX31865(MAX31865_CS_PIN
     #ifdef MAX31865_SCK_PIN
@@ -1357,14 +1348,9 @@ void Temperature::manage_heater() {
       case 0:
         #if ENABLED(HEATER_0_USER_THERMISTOR)
           return user_thermistor_to_deg_c(CTI_HOTEND_0, raw);
-        #elif ENABLED(HEATER_0_USES_MAX6675)
+        #elif EITHER(HEATER_0_USES_MAX6675, HEATER_0_USES_MAX31865)
           return (
               raw * 0.25
-          );
-        #elif ENABLED(HEATER_0_USES_MAX31865)
-        // Our raw value is 10x the actual value to give one decimal
-          return (
-              raw * 0.1
           );
         #elif ENABLED(HEATER_0_USES_AD595)
           return TEMP_AD595(raw);
@@ -1376,13 +1362,9 @@ void Temperature::manage_heater() {
       case 1:
         #if ENABLED(HEATER_1_USER_THERMISTOR)
           return user_thermistor_to_deg_c(CTI_HOTEND_1, raw);
-        #elif ENABLED(HEATER_1_USES_MAX6675)
+        #elif EITHER(HEATER_1_USES_MAX6675, HEATER_1_USES_MAX31865)
           return (
               raw * 0.25
-          );
-        #elif ENABLED(HEATER_1_USES_MAX31865)
-          return (
-              raw * 0.1
           );
         #elif ENABLED(HEATER_1_USES_AD595)
           return TEMP_AD595(raw);
@@ -2128,15 +2110,17 @@ void Temperature::disable_all_heaters() {
 
     next_max31865_ms[hindex] = ms + MAX31865_HEAT_INTERVAL;
       if (hindex == 0 ) {
-      max31865_temp = int(max31865.temperature(TEMP_SENSOR_MAX31865_RTDRES, TEMP_SENSOR_MAX31865_CALRES)*10.0); // Set in Configuration_adv.h
+      max31865_temp = int(max31865.temperature(TEMP_SENSOR_MAX31865_RTDRES, TEMP_SENSOR_MAX31865_CALRES)*4.0); // Set in Configuration_adv.h
       max31865_fault = max31865.readFault();
     #if COUNT_31865 > 1 
   } else if (hindex == 1 ) {
-      max31865_temp = int(max31865_1.temperature(TEMP_SENSOR_MAX31865_RTDRES, TEMP_SENSOR_MAX31865_CALRES)*10.0); // Set in Configuration_adv.h
+      max31865_temp = int(max31865_1.temperature(TEMP_SENSOR_MAX31865_RTDRES, TEMP_SENSOR_MAX31865_CALRES)*4.0); // Set in Configuration_adv.h
       max31865_fault = max31865_1.readFault();
     #endif
   };
+      #ifdef MAX31865_VERBOSE_DEBUG
         SERIAL_ECHOLNPAIR("MAX31865 Read: ",max31865_temp);
+      #endif
 
       if (max31865_fault) {
       SERIAL_ERROR_START();
