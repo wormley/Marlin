@@ -1,6 +1,6 @@
 /**
  * Marlin 3D Printer Firmware
- * Copyright (c) 2019 MarlinFirmware [https://github.com/MarlinFirmware/Marlin]
+ * Copyright (c) 2020 MarlinFirmware [https://github.com/MarlinFirmware/Marlin]
  *
  * Based on Sprinter and grbl.
  * Copyright (c) 2011 Camiel Gubbels / Erik van der Zalm
@@ -35,9 +35,8 @@ public:
    * commands to Marlin, and lines will be checked for sequentiality.
    * M110 N<int> sets the current line number.
    */
-  static long last_N, stopped_N;
 
-  static inline void stop() { stopped_N = last_N; }
+  static long last_N[NUM_SERIAL];
 
   /**
    * GCode Command Queue
@@ -53,12 +52,20 @@ public:
 
   static char command_buffer[BUFSIZE][MAX_CMD_SIZE];
 
-  /*
+  /**
    * The port that the command was received on
    */
   #if NUM_SERIAL > 1
     static int16_t port[BUFSIZE];
   #endif
+
+  static int16_t command_port() {
+    return (0
+      #if NUM_SERIAL > 1
+        + port[index_r]
+      #endif
+    );
+  }
 
   GCodeQueue();
 
@@ -68,16 +75,41 @@ public:
   static void clear();
 
   /**
-   * Enqueue one or many commands to run from program memory.
-   * Aborts the current queue, if any.
-   * Note: process_injected_command() will process them.
+   * Next Injected Command (PROGMEM) pointer. (nullptr == empty)
+   * Internal commands are enqueued ahead of serial / SD commands.
    */
-  static void inject_P(PGM_P const pgcode);
+  static PGM_P injected_commands_P;
+
+  /**
+   * Injected Commands (SRAM)
+   */
+  static char injected_commands[64];
+
+  /**
+   * Enqueue command(s) to run from PROGMEM. Drained by process_injected_command_P().
+   * Don't inject comments or use leading spaces!
+   * Aborts the current PROGMEM queue so only use for one or two commands.
+   */
+  static inline void inject_P(PGM_P const pgcode) { injected_commands_P = pgcode; }
+
+  /**
+   * Enqueue command(s) to run from SRAM. Drained by process_injected_command().
+   * Aborts the current SRAM queue so only use for one or two commands.
+   */
+  static inline void inject(char * const gcode) {
+    strncpy(injected_commands, gcode, sizeof(injected_commands) - 1);
+  }
 
   /**
    * Enqueue and return only when commands are actually enqueued
    */
   static void enqueue_one_now(const char* cmd);
+
+  /**
+   * Attempt to enqueue a single G-code command
+   * and return 'true' if successful.
+   */
+  static bool enqueue_one_P(PGM_P const pgcode);
 
   /**
    * Enqueue from program memory and return only when commands are actually enqueued
@@ -141,7 +173,10 @@ private:
     #endif
   );
 
-  // Process the next "immediate" command
+  // Process the next "immediate" command (PROGMEM)
+  static bool process_injected_command_P();
+
+  // Process the next "immediate" command (SRAM)
   static bool process_injected_command();
 
   /**
@@ -150,7 +185,7 @@ private:
    */
   static bool enqueue_one(const char* cmd);
 
-  static void gcode_line_error(PGM_P const err, const int8_t port);
+  static void gcode_line_error(PGM_P const err, const int8_t pn);
 
 };
 
