@@ -36,27 +36,40 @@
   #include "../lcd/extensible_ui/ui_api.h"
 #endif
 
-#if ENABLED(MAX6675_IS_MAX31865)
+#if COUNT_31865 > 0 
   #include "Adafruit_MAX31865.h"
   #ifndef MAX31865_CS_PIN
-    #define MAX31865_CS_PIN     MAX6675_SS_PIN  // HW:49   SW:65    for example
+    #error For a MAX31865 the MAX31865_CS_PIN must be set
   #endif
-  #ifndef MAX31865_MOSI_PIN
-    #define MAX31865_MOSI_PIN   MOSI_PIN        //            63
+  #if ENABLED(HEATER_0_USES_MAX31865)
+    #define HEATER_0_RAW_LOW_TEMP 0
+    #define HEATER_0_RAW_HIGH_TEMP 16384
   #endif
-  #ifndef MAX31865_MISO_PIN
-    #define MAX31865_MISO_PIN   MAX6675_DO_PIN  //            42
+  #if ENABLED(HEATER_1_USES_MAX31865)
+    #define HEATER_1_RAW_LOW_TEMP 0
+    #define HEATER_1_RAW_HIGH_TEMP 16384
   #endif
-  #ifndef MAX31865_SCK_PIN
-    #define MAX31865_SCK_PIN    MAX6675_SCK_PIN //            40
-  #endif
+
+  // If SCK is defined then we're using SW SPI, otherwise Hardware
   Adafruit_MAX31865 max31865 = Adafruit_MAX31865(MAX31865_CS_PIN
-    #if MAX31865_CS_PIN != MAX6675_SS_PIN
+    #ifdef MAX31865_SCK_PIN
       , MAX31865_MOSI_PIN           // For software SPI also set MOSI/MISO/SCK
       , MAX31865_MISO_PIN
       , MAX31865_SCK_PIN
     #endif
   );
+  #if COUNT_31865 >1
+  #ifndef MAX31865_CS2_PIN
+    #error For a second MAX31865 the MAX31865_CS2_PIN must be set
+  #endif
+  Adafruit_MAX31865 max31865_1 = Adafruit_MAX31865(MAX31865_CS2_PIN
+    #ifdef MAX31865_SCK_PIN
+      , MAX31865_MOSI_PIN           // For software SPI also set MOSI/MISO/SCK
+      , MAX31865_MISO_PIN
+      , MAX31865_SCK_PIN
+    #endif
+  );
+  #endif
 #endif
 
 #define MAX6675_SEPARATE_SPI (EITHER(HEATER_0_USES_MAX6675, HEATER_1_USES_MAX6675) && PIN_EXISTS(MAX6675_SCK, MAX6675_DO))
@@ -1407,11 +1420,12 @@ void Temperature::manage_heater() {
           return user_thermistor_to_deg_c(CTI_HOTEND_0, raw);
         #elif ENABLED(HEATER_0_USES_MAX6675)
           return (
-            #if ENABLED(MAX6675_IS_MAX31865)
-              max31865.temperature(100, 400)  // 100 ohms = PT100 resistance. 400 ohms = calibration resistor
-            #else
               raw * 0.25
-            #endif
+          );
+        #elif ENABLED(HEATER_0_USES_MAX31865)
+        // Our raw value is 10x the actual value to give one decimal
+          return (
+              raw * 0.1
           );
         #elif ENABLED(HEATER_0_USES_AD595)
           return TEMP_AD595(raw);
@@ -1424,7 +1438,13 @@ void Temperature::manage_heater() {
         #if ENABLED(HEATER_1_USER_THERMISTOR)
           return user_thermistor_to_deg_c(CTI_HOTEND_1, raw);
         #elif ENABLED(HEATER_1_USES_MAX6675)
-          return raw * 0.25;
+          return (
+              raw * 0.25
+          );
+        #elif ENABLED(HEATER_1_USES_MAX31865)
+          return (
+              raw * 0.1
+          );
         #elif ENABLED(HEATER_1_USES_AD595)
           return TEMP_AD595(raw);
         #elif ENABLED(HEATER_1_USES_AD8495)
@@ -1534,6 +1554,12 @@ void Temperature::updateTemperaturesFromRawValues() {
   #if ENABLED(HEATER_1_USES_MAX6675)
     temp_hotend[1].raw = READ_MAX6675(1);
   #endif
+  #if ENABLED(HEATER_0_USES_MAX31865)
+    temp_hotend[0].raw = READ_MAX31865(0);
+  #endif
+  #if ENABLED(HEATER_1_USES_MAX31865)
+    temp_hotend[1].raw = READ_MAX31865(1);
+  #endif
   #if HOTENDS
     HOTEND_LOOP() temp_hotend[e].celsius = analog_to_celsius_hotend(temp_hotend[e].raw, e);
   #endif
@@ -1594,8 +1620,11 @@ void Temperature::updateTemperaturesFromRawValues() {
  */
 void Temperature::init() {
 
-  #if ENABLED(MAX6675_IS_MAX31865)
+  #if ENABLED(HEATER_0_USES_MAX31865)
     max31865.begin(MAX31865_2WIRE); // MAX31865_2WIRE, MAX31865_3WIRE, MAX31865_4WIRE
+  #endif
+  #if ENABLED(HEATER_1_USES_MAX31865)
+    max31865_1.begin(MAX31865_2WIRE); // MAX31865_2WIRE, MAX31865_3WIRE, MAX31865_4WIRE
   #endif
 
   #if EARLY_WATCHDOG
@@ -2051,146 +2080,108 @@ void Temperature::disable_all_heaters() {
 
 #endif // PROBING_HEATERS_OFF
 
-#if HAS_MAX6675
+#if HAS_MAX31865
 
-  int Temperature::read_max6675(
-    #if COUNT_6675 > 1
+  int Temperature::read_max31865(
+    #if COUNT_31865 > 1
       const uint8_t hindex
     #endif
   ) {
-    #if COUNT_6675 == 1
+    #if COUNT_31865 == 1
       constexpr uint8_t hindex = 0;
     #else
       // Needed to return the correct temp when this is called too soon
-      static uint16_t max6675_temp_previous[COUNT_6675] = { 0 };
+      static uint16_t max31865_temp_previous[COUNT_31865] = { 0 };
     #endif
+    uint16_t max31865_fault;
 
-    #define MAX6675_HEAT_INTERVAL 250UL
+    #define MAX31865_HEAT_INTERVAL 250UL
 
-    #if ENABLED(MAX6675_IS_MAX31855)
-      static uint32_t max6675_temp = 2000;
-      #define MAX6675_ERROR_MASK    7
-      #define MAX6675_DISCARD_BITS 18
-      #define MAX6675_SPEED_BITS    3  // (_BV(SPR1)) // clock ÷ 64
-    #else
-      static uint16_t max6675_temp = 2000;
-      #define MAX6675_ERROR_MASK    4
-      #define MAX6675_DISCARD_BITS  3
-      #define MAX6675_SPEED_BITS    2  // (_BV(SPR0)) // clock ÷ 16
-    #endif
+    static uint32_t max31865_temp = 2000;
 
     // Return last-read value between readings
-    static millis_t next_max6675_ms[COUNT_6675] = { 0 };
+    static millis_t next_max31865_ms[COUNT_31865] = { 0 };
     millis_t ms = millis();
-    if (PENDING(ms, next_max6675_ms[hindex]))
+    if (PENDING(ms, next_max31865_ms[hindex]))
       return int(
-        #if COUNT_6675 == 1
-          max6675_temp
+        #if COUNT_31865 == 1
+          max31865_temp
         #else
-          max6675_temp_previous[hindex] // Need to return the correct previous value
+          max31865_temp_previous[hindex] // Need to return the correct previous value
         #endif
       );
 
-    next_max6675_ms[hindex] = ms + MAX6675_HEAT_INTERVAL;
-
-    #if ENABLED(MAX6675_IS_MAX31865)
-      max6675_temp = int(max31865.temperature(100, 400)); // 100 ohms = PT100 resistance. 400 ohms = calibration resistor
+    next_max31865_ms[hindex] = ms + MAX31865_HEAT_INTERVAL;
+      if (hindex == 0 ) {
+      max31865_temp = int(max31865.temperature(TEMP_SENSOR_MAX31865_RTDRES, TEMP_SENSOR_MAX31865_CALRES)*10.0); // Set in Configuration_adv.h
+      max31865_fault = max31865.readFault();
+    #if COUNT_31865 > 1 
+  } else if (hindex == 1 ) {
+      max31865_temp = int(max31865_1.temperature(TEMP_SENSOR_MAX31865_RTDRES, TEMP_SENSOR_MAX31865_CALRES)*10.0); // Set in Configuration_adv.h
+      max31865_fault = max31865_1.readFault();
     #endif
+  };
+        SERIAL_ECHOLNPAIR("MAX31865 Read: ",max31865_temp);
 
-    //
-    // TODO: spiBegin, spiRec and spiInit doesn't work when soft spi is used.
-    //
-    #if !MAX6675_SEPARATE_SPI
-      spiBegin();
-      spiInit(MAX6675_SPEED_BITS);
-    #endif
-
-    #if COUNT_6675 > 1
-      #define WRITE_MAX6675(V) do{ switch (hindex) { case 1: WRITE(MAX6675_SS2_PIN, V); break; default: WRITE(MAX6675_SS_PIN, V); } }while(0)
-      #define SET_OUTPUT_MAX6675() do{ switch (hindex) { case 1: SET_OUTPUT(MAX6675_SS2_PIN); break; default: SET_OUTPUT(MAX6675_SS_PIN); } }while(0)
-    #elif ENABLED(HEATER_1_USES_MAX6675)
-      #define WRITE_MAX6675(V) WRITE(MAX6675_SS2_PIN, V)
-      #define SET_OUTPUT_MAX6675() SET_OUTPUT(MAX6675_SS2_PIN)
-    #else
-      #define WRITE_MAX6675(V) WRITE(MAX6675_SS_PIN, V)
-      #define SET_OUTPUT_MAX6675() SET_OUTPUT(MAX6675_SS_PIN)
-    #endif
-
-    SET_OUTPUT_MAX6675();
-    WRITE_MAX6675(LOW);  // enable TT_MAX6675
-
-    DELAY_NS(100);       // Ensure 100ns delay
-
-    // Read a big-endian temperature value
-    max6675_temp = 0;
-    for (uint8_t i = sizeof(max6675_temp); i--;) {
-      max6675_temp |= (
-        #if MAX6675_SEPARATE_SPI
-          max6675_spi.receive()
-        #else
-          spiRec()
-        #endif
-      );
-      if (i > 0) max6675_temp <<= 8; // shift left if not the last byte
-    }
-
-    WRITE_MAX6675(HIGH); // disable TT_MAX6675
-
-    if (max6675_temp & MAX6675_ERROR_MASK) {
+      if (max31865_fault) {
       SERIAL_ERROR_START();
       SERIAL_ECHOPGM("Temp measurement error! ");
-      #if MAX6675_ERROR_MASK == 7
-        SERIAL_ECHOPGM("MAX31855 ");
-        if (max6675_temp & 1)
-          SERIAL_ECHOLNPGM("Open Circuit");
-        else if (max6675_temp & 2)
-          SERIAL_ECHOLNPGM("Short to GND");
-        else if (max6675_temp & 4)
-          SERIAL_ECHOLNPGM("Short to VCC");
-      #else
-        SERIAL_ECHOLNPGM("MAX6675");
+        SERIAL_ECHOPAIR("MAX31865 ",hindex);
+        SERIAL_ECHOPAIR(" Fault: ",max31865_fault);
+        if (max31865_fault & MAX31865_FAULT_HIGHTHRESH)
+          SERIAL_ECHOLNPGM("RTD High Threshold");
+        else if (max31865_fault & MAX31865_FAULT_LOWTHRESH)
+          SERIAL_ECHOLNPGM("RTD Low Threshold");
+        else if (max31865_temp & MAX31865_FAULT_REFINLOW)
+          SERIAL_ECHOLNPGM("REFIN- > 0.85 x Bias");
+        else if (max31865_temp & MAX31865_FAULT_REFINHIGH)
+          SERIAL_ECHOLNPGM("REFIN- < 0.85 x Bias - FORCE- open");
+        else if (max31865_temp & MAX31865_FAULT_RTDINLOW)
+          SERIAL_ECHOLNPGM("RTDIN- < 0.85 x Bias - FORCE- open");
+        else if (max31865_temp & MAX31865_FAULT_OVUV)
+          SERIAL_ECHOLNPGM("Under/Over voltage");
+      if (hindex == 0 ) {
+        max31865.clearFault();
+      #if COUNT_31865 > 1 
+      } else if (hindex == 1 ) {
+        max31865_1.clearFault();
       #endif
-
-      // Thermocouple open
-      max6675_temp = 4 * (
-        #if COUNT_6675 > 1
-          hindex ? HEATER_1_MAX6675_TMAX : HEATER_0_MAX6675_TMAX
-        #elif ENABLED(HEATER_1_USES_MAX6675)
-          HEATER_1_MAX6675_TMAX
+      };
+      // Set temp to  indicate failure
+      max31865_temp =  1+ (
+        #if COUNT_31865 > 1
+          hindex ? HEATER_1_RAW_HI_TEMP : HEATER_0_RAW_HI_TEMP
+        #elif ENABLED(HEATER_1_USES_MAX31865)
+          HEATER_1_RAW_HI_TEMP
         #else
-          HEATER_0_MAX6675_TMAX
+          HEATER_0_RAW_HI_TEMP
         #endif
       );
-    }
-    else
-      max6675_temp >>= MAX6675_DISCARD_BITS;
+      };
+  
 
-    #if ENABLED(MAX6675_IS_MAX31855)
-      if (max6675_temp & 0x00002000) max6675_temp |= 0xFFFFC000; // Support negative temperature
+    #if COUNT_31865 > 1
+      max31865_temp_previous[hindex] = max31865_temp;
     #endif
 
-    #if COUNT_6675 > 1
-      max6675_temp_previous[hindex] = max6675_temp;
-    #endif
-
-    return int(max6675_temp);
+    return int(max31865_temp);
   }
 
-#endif // HAS_MAX6675
+#endif // HAS_MAX31865
 
 /**
  * Get raw temperatures
  */
 void Temperature::set_current_temp_raw() {
 
-  #if HAS_TEMP_ADC_0 && DISABLED(HEATER_0_USES_MAX6675)
+  #if HAS_TEMP_ADC_0 && DISABLED(HEATER_0_USES_MAX6675) && DISABLED(HEATER_0_USES_MAX31865)
     temp_hotend[0].update();
   #endif
 
   #if HAS_TEMP_ADC_1
     #if ENABLED(TEMP_SENSOR_1_AS_REDUNDANT)
       redundant_temperature_raw = temp_hotend[1].acc;
-    #elif DISABLED(HEATER_1_USES_MAX6675)
+    #elif DISABLED(HEATER_1_USES_MAX6675) && DISABLED(HEATER_1_USES_MAX31865)
       temp_hotend[1].update();
     #endif
     #if HAS_TEMP_ADC_2

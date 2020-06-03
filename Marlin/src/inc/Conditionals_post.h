@@ -345,8 +345,11 @@
 
 #define HAS_USER_THERMISTORS ANY_TEMP_SENSOR_IS(1000)
 
-#if TEMP_SENSOR_0 == -5 || TEMP_SENSOR_0 == -3 || TEMP_SENSOR_0 == -2
-  #define HEATER_0_USES_MAX6675
+#if TEMP_SENSOR_0 == -5
+  #define HEATER_0_RAW_HI_TEMP 16384
+  #define HEATER_0_RAW_LO_TEMP -16384
+  #define HEATER_0_USES_MAX31865
+#elif TEMP_SENSOR_0 == -3 || TEMP_SENSOR_0 == -2
   #if TEMP_SENSOR_0 == -3
     #define HEATER_0_MAX6675_TMIN -270
     #define HEATER_0_MAX6675_TMAX 1800
@@ -354,9 +357,8 @@
     #define HEATER_0_MAX6675_TMIN    0
     #define HEATER_0_MAX6675_TMAX 1024
   #endif
-  #if TEMP_SENSOR_0 == -5
-    #define MAX6675_IS_MAX31865
-  #elif TEMP_SENSOR_0 == -3
+  #define HEATER_0_USES_MAX6675
+  #if TEMP_SENSOR_0 == -3
     #define MAX6675_IS_MAX31855
   #endif
 #elif TEMP_SENSOR_0 == -4
@@ -374,8 +376,14 @@
   #undef HEATER_0_MAXTEMP
 #endif
 
-#if TEMP_SENSOR_1 == -5 || TEMP_SENSOR_1 == -3 || TEMP_SENSOR_1 == -2
-  #define HEATER_1_USES_MAX6675
+#if TEMP_SENSOR_1 == -5 
+  #define HEATER_1_RAW_HI_TEMP 16384
+  #define HEATER_1_RAW_LO_TEMP -16384
+  #define HEATER_1_USES_MAX31865
+  #if TEMP_SENSOR_1 != TEMP_SENSOR_0
+      #error "If MAX31865 RTD (-5) is used for TEMP_SENSOR_1 then TEMP_SENSOR_0 must match."
+  #endif
+#elif TEMP_SENSOR_1 == -3 || TEMP_SENSOR_1 == -2
   #if TEMP_SENSOR_1 == -3
     #define HEATER_1_MAX6675_TMIN -270
     #define HEATER_1_MAX6675_TMAX 1800
@@ -383,10 +391,9 @@
     #define HEATER_1_MAX6675_TMIN    0
     #define HEATER_1_MAX6675_TMAX 1024
   #endif
+  #define HEATER_1_USES_MAX6675
   #if TEMP_SENSOR_1 != TEMP_SENSOR_0
-    #if   TEMP_SENSOR_1 == -5
-      #error "If MAX31865 Thermocouple (-5) is used for TEMP_SENSOR_1 then TEMP_SENSOR_0 must match."
-    #elif TEMP_SENSOR_1 == -3
+    #if TEMP_SENSOR_1 == -3
       #error "If MAX31855 Thermocouple (-3) is used for TEMP_SENSOR_1 then TEMP_SENSOR_0 must match."
     #elif TEMP_SENSOR_1 == -2
       #error "If MAX6675 Thermocouple (-2) is used for TEMP_SENSOR_1 then TEMP_SENSOR_0 must match."
@@ -485,6 +492,8 @@
 
 #if TEMP_SENSOR_BED == -4
   #define HEATER_BED_USES_AD8495
+#elif TEMP_SENSOR_BED == -5
+  #error "MAX31865 RTD (-5) not supported for TEMP_SENSOR_BED."
 #elif TEMP_SENSOR_BED == -3
   #error "MAX31855 Thermocouples (-3) not supported for TEMP_SENSOR_BED."
 #elif TEMP_SENSOR_BED == -2
@@ -504,6 +513,8 @@
 
 #if TEMP_SENSOR_CHAMBER == -4
   #define HEATER_CHAMBER_USES_AD8495
+#elif TEMP_SENSOR_CHAMBER == -5
+  #error "MAX31865 RTD (-5) not supported for TEMP_SENSOR_CHAMBER."
 #elif TEMP_SENSOR_CHAMBER == -3
   #error "MAX31855 Thermocouples (-3) not supported for TEMP_SENSOR_CHAMBER."
 #elif TEMP_SENSOR_CHAMBER == -2
@@ -1013,7 +1024,7 @@
 #define HAS_CALIBRATION_PIN (PIN_EXISTS(CALIBRATION))
 
 // ADC Temp Sensors (Thermistor or Thermocouple with amplifier ADC interface)
-#define HAS_ADC_TEST(P) (PIN_EXISTS(TEMP_##P) && TEMP_SENSOR_##P != 0 && DISABLED(HEATER_##P##_USES_MAX6675))
+#define HAS_ADC_TEST(P) (PIN_EXISTS(TEMP_##P) && TEMP_SENSOR_##P != 0 && DISABLED(HEATER_##P##_USES_MAX))
 #define HAS_TEMP_ADC_0 HAS_ADC_TEST(0)
 #define HAS_TEMP_ADC_1 HAS_ADC_TEST(1)
 #define HAS_TEMP_ADC_2 HAS_ADC_TEST(2)
@@ -1023,7 +1034,7 @@
 #define HAS_TEMP_ADC_BED HAS_ADC_TEST(BED)
 #define HAS_TEMP_ADC_CHAMBER HAS_ADC_TEST(CHAMBER)
 
-#define HAS_TEMP_HOTEND (HOTENDS > 0 && (HAS_TEMP_ADC_0 || ENABLED(HEATER_0_USES_MAX6675)))
+#define HAS_TEMP_HOTEND (HOTENDS > 0 && (HAS_TEMP_ADC_0 || ENABLED(HEATER_0_USES_MAX)))
 #define HAS_TEMP_BED HAS_TEMP_ADC_BED
 #define HAS_TEMP_CHAMBER HAS_TEMP_ADC_CHAMBER
 #define HAS_HEATED_CHAMBER (HAS_TEMP_CHAMBER && PIN_EXISTS(HEATER_CHAMBER))

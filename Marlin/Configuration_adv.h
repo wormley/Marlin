@@ -320,6 +320,11 @@
 #define TEMP_SENSOR_AD8495_OFFSET 0.0
 #define TEMP_SENSOR_AD8495_GAIN   1.0
 
+// Settings for MAX38165
+#define TEMP_SENSOR_MAX31865_RTDRES 100
+#define TEMP_SENSOR_MAX31865_CALRES 430
+
+
 /**
  * Controller Fan
  * To cool down the stepper drivers and MOSFETs.
@@ -2041,7 +2046,7 @@
    * The default SW SPI pins are defined the respective pins files,
    * but you can override or define them here.
    */
-  //#define TMC_USE_SW_SPI
+  #define TMC_USE_SW_SPI
   //#define TMC_SW_MOSI       -1
   //#define TMC_SW_MISO       -1
   //#define TMC_SW_SCK        -1
@@ -2200,7 +2205,7 @@
    * Enable M122 debugging command for TMC stepper drivers.
    * M122 S0/1 will enable continous reporting.
    */
-  //#define TMC_DEBUG
+#define TMC_DEBUG
 
   /**
    * You can set your own advanced settings by filling in predefined functions.

@@ -795,6 +795,24 @@ class Temperature {
         #endif
       );
     #endif
+    #define HAS_MAX31865 EITHER(HEATER_0_USES_MAX31865, HEATER_1_USES_MAX31865)
+    #if HAS_MAX31865
+      #if BOTH(HEATER_0_USES_MAX31865, HEATER_1_USES_MAX31865)
+        #define COUNT_31865 2
+      #else
+        #define COUNT_31865 1
+      #endif
+      #if COUNT_31865 > 1
+        #define READ_MAX31865(N) read_max31865(N)
+      #else
+        #define READ_MAX31865(N) read_max31865()
+      #endif
+      static int read_max31865(
+        #if COUNT_31865 > 1
+          const uint8_t hindex=0
+        #endif
+      );
+    #endif
 
     static void checkExtruderAutoFans();
 
