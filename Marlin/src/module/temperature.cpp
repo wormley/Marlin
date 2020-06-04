@@ -38,23 +38,23 @@
 
 #if COUNT_31865 > 0 
   #include "Adafruit_MAX31865.h"
-  #ifndef MAX31865_CS_PIN
+  #if ! (defined (MAX31865_CS_PIN) && MAX31865_CS_PIN >= 0 )
     #error For a MAX31865 the MAX31865_CS_PIN must be set
   #endif
   // If SCK is defined then we're using SW SPI, otherwise Hardware
   Adafruit_MAX31865 max31865 = Adafruit_MAX31865(MAX31865_CS_PIN
-    #ifdef MAX31865_SCK_PIN
+    #if (defined(MAX31865_SCK_PIN) && MAX31865_SCK_PIN >0 )
       , MAX31865_MOSI_PIN           // For software SPI also set MOSI/MISO/SCK
       , MAX31865_MISO_PIN
       , MAX31865_SCK_PIN
     #endif
   );
   #if COUNT_31865 >1
-  #ifndef MAX31865_CS2_PIN
+  #if ! (defined (MAX31865_CS2_PIN) && MAX31865_CS2_PIN >= 0 )
     #error For a second MAX31865 the MAX31865_CS2_PIN must be set
   #endif
   Adafruit_MAX31865 max31865_1 = Adafruit_MAX31865(MAX31865_CS2_PIN
-    #ifdef MAX31865_SCK_PIN
+    #if (defined(MAX31865_SCK_PIN) && MAX31865_SCK_PIN >0 )
       , MAX31865_MOSI_PIN           // For software SPI also set MOSI/MISO/SCK
       , MAX31865_MISO_PIN
       , MAX31865_SCK_PIN
@@ -1576,10 +1576,10 @@ void Temperature::updateTemperaturesFromRawValues() {
 void Temperature::init() {
 
   #if ENABLED(HEATER_0_USES_MAX31865)
-    max31865.begin(MAX31865_2WIRE); // MAX31865_2WIRE, MAX31865_3WIRE, MAX31865_4WIRE
+    max31865.begin(TEMP_SENSOR_0_MAX31865_WIRES); 
   #endif
   #if ENABLED(HEATER_1_USES_MAX31865)
-    max31865_1.begin(MAX31865_2WIRE); // MAX31865_2WIRE, MAX31865_3WIRE, MAX31865_4WIRE
+    max31865_1.begin(TEMP_SENSOR_1_MAX31865_WIRES);
   #endif
 
   #if EARLY_WATCHDOG
@@ -2090,7 +2090,9 @@ void Temperature::disable_all_heaters() {
       // Needed to return the correct temp when this is called too soon
       static uint16_t max31865_temp_previous[COUNT_31865] = { 0 };
     #endif
-    uint16_t max31865_fault;
+    // Set this so if somehow we get called for a heater index we don't manage
+    // We'll fail.
+    uint16_t max31865_fault=255;
 
     #define MAX31865_HEAT_INTERVAL 250UL
 
@@ -2122,21 +2124,21 @@ void Temperature::disable_all_heaters() {
         SERIAL_ECHOLNPAIR("MAX31865 Read: ",max31865_temp);
       #endif
 
-      if (max31865_fault) {
+      if (max31865_fault || max31865_temp < (TEMP_SENSOR_MAX31865_MINERROR * 4.0)) {
       SERIAL_ERROR_START();
       SERIAL_ECHOPGM("Temp measurement error! ");
         SERIAL_ECHOPAIR("MAX31865 ",hindex);
         SERIAL_ECHOPAIR(" Fault: ",max31865_fault);
         if (max31865_fault & MAX31865_FAULT_HIGHTHRESH)
-          SERIAL_ECHOLNPGM("RTD High Threshold");
+          SERIAL_ECHOLNPGM(" RTD High Threshold");
         else if (max31865_fault & MAX31865_FAULT_LOWTHRESH)
-          SERIAL_ECHOLNPGM("RTD Low Threshold");
+          SERIAL_ECHOLNPGM(" RTD Low Threshold");
         else if (max31865_temp & MAX31865_FAULT_REFINLOW)
-          SERIAL_ECHOLNPGM("REFIN- > 0.85 x Bias");
+          SERIAL_ECHOLNPGM(" REFIN- > 0.85 x Bias");
         else if (max31865_temp & MAX31865_FAULT_REFINHIGH)
-          SERIAL_ECHOLNPGM("REFIN- < 0.85 x Bias - FORCE- open");
+          SERIAL_ECHOLNPGM(" REFIN- < 0.85 x Bias - FORCE- open");
         else if (max31865_temp & MAX31865_FAULT_RTDINLOW)
-          SERIAL_ECHOLNPGM("RTDIN- < 0.85 x Bias - FORCE- open");
+          SERIAL_ECHOLNPGM(" RTDIN- < 0.85 x Bias - FORCE- open");
         else if (max31865_temp & MAX31865_FAULT_OVUV)
           SERIAL_ECHOLNPGM("Under/Over voltage");
       if (hindex == 0 ) {

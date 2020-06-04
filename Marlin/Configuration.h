@@ -104,13 +104,13 @@
  *
  * :[-1, 0, 1, 2, 3, 4, 5, 6, 7]
  */
-#define SERIAL_PORT -1
+#define SERIAL_PORT 1
 
 /**
  * Select a secondary serial port on the board to use for communication with the host.
  * :[-1, 0, 1, 2, 3, 4, 5, 6, 7]
  */
-#define SERIAL_PORT_2 1
+#define SERIAL_PORT_2 -1
 
 /**
  * This setting determines the communication speed of the printer.
@@ -415,9 +415,10 @@
  *   998 : Dummy Table that ALWAYS reads 25°C or the temperature defined below.
  *   999 : Dummy Table that ALWAYS reads 100°C or the temperature defined below.
  */
-#define MAX31865_VERBOSE_DEBUG
+//#define MAX31865_VERBOSE_DEBUG
+
 #define TEMP_SENSOR_0 -5
-#define TEMP_SENSOR_1 998
+#define TEMP_SENSOR_1 -5
 #define TEMP_SENSOR_2 0
 #define TEMP_SENSOR_3 0
 #define TEMP_SENSOR_4 0
@@ -429,12 +430,12 @@
 #define TEMP_SENSOR_CHAMBER 0
 
 // ADAFRUIT MAX31865 SPI Pins
-// These are the same as the SW SPI for the 
+// These are the same as the SW SPI for the TMC
 #define MAX31865_SCK_PIN  PC10              // For E0 MAX31865 PT100
 #define MAX31865_MISO_PIN PC11              // For E0 MAX31865 PT100
 #define MAX31865_MOSI_PIN PC12              // For E0 MAX31865 PT100
 #define MAX31865_CS_PIN   PD4        // This is the UART PIN for E0 that we're not using
-//#define MAX31865_CS2_PIN   PD6        // This is the UART PIN for E1 that we're not using
+#define MAX31865_CS2_PIN   PD1        // This is the UART PIN for E1 that we're not using
 
 
 // Dummy thermistor constant temperature readings, for use with 998 and 999
@@ -469,7 +470,11 @@
 // Above this temperature the heater will be switched off.
 // This can protect components from overheating, but NOT from shorts and failures.
 // (Use MINTEMP for thermistor short/failure protection.)
-#define HEATER_0_MAXTEMP 275
+
+// Danger Will Robinson
+#define HEATER_0_MAXTEMP 520
+// Danger
+
 #define HEATER_1_MAXTEMP 275
 #define HEATER_2_MAXTEMP 275
 #define HEATER_3_MAXTEMP 275
@@ -540,7 +545,7 @@
  * Max Bed Power
  * Applies to all forms of bed control (PID, bang-bang, and bang-bang with hysteresis).
  * When set to any value below 255, enables a form of PWM to the bed that acts like a divider
- * so don't use it unless you are OK with PWM on your bed. (See the comment on enabling PIDTEMPBED)
+ * so don't use it unless you are OK with PWM on your bed. (See the comment on enablingM155  PIDTEMPBED)
  */
 #define MAX_BED_POWER 255 // limits duty cycle to bed; 255=full current
 

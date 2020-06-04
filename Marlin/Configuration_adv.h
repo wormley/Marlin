@@ -365,8 +365,21 @@
 #define TEMP_SENSOR_AD8495_GAIN   1.0
 
 // Settings for MAX38165
+// Nominal value of RTD(typically 100 or 1000)
 #define TEMP_SENSOR_MAX31865_RTDRES 100
+// Calibration resistor value(typically 430 or 4300)
 #define TEMP_SENSOR_MAX31865_CALRES 430
+// Change this if you really need to measure below -200C
+// (Shorted sensor produces values around -230 or so)
+#define TEMP_SENSOR_MAX31865_MINERROR -200 
+
+
+// Set to MAX31865_2WIRE 3WIRE or 4WIRE
+// 2 Wire and 4 Wire are currently the same in the library
+// It's safe to have this here without MAX31865 support enabled 
+// since these will never be used
+#define TEMP_SENSOR_0_MAX31865_WIRES MAX31865_2WIRE
+#define TEMP_SENSOR_1_MAX31865_WIRES MAX31865_2WIRE
 
 
 /**
